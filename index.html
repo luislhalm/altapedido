@@ -282,17 +282,15 @@ window.APP_CONFIG = {
     // true = datos de prueba en el navegador (sin API). Ponlo a false cuando la API esté lista.
     useMock: true,
 
-    baseUrl: "https://api.grupolopezguillen.net",
-
-    // Scope de la API si está protegida con Entra ID (p.ej. "api://<id-api>/access_as_user").
-    // null = no se envía token.
-    scope: null,
+    // "API SQL" (backend compartido con Inventarios y Estado Pedidos)
+    baseUrl: "https://app.capa.es/StockApi",
+    scope: "api://7e111b26-74c9-4dad-a305-95af0bb33cdf/access_as_user",
 
     endpoints: {
-      // Devuelve las filas de la vista (email, cliente, localización, tarifa) del comercial logueado
-      clientes: "/pedidos/clientes",
-      // SELECT * FROM jokin.fn_tarifas_pedidos(@xemail, @xcliente_id, @xlocal_id). Recibe ?xcliente_id=&xlocal_id= (el email lo pone la API desde el token)
-      articulos: "/pedidos/articulos",
+      // Clientes y localizaciones del comercial logueado (la API filtra por el email del token)
+      clientes: "/api/pedidos/clientes",
+      // jokin.fn_tarifas_pedidos(@email del token, @xcliente_id, @xlocal_id). Recibe ?xcliente_id=&xlocal_id=
+      articulos: "/api/pedidos/tarifas",
     },
   },
 
@@ -302,8 +300,8 @@ window.APP_CONFIG = {
       email: "xemail",
       codCliente: "xcliente_id",
       nombreCliente: "cliente",
-      codLocalizacion: "LocEnvId",
-      nombreLocalizacion: "LocEnvio",
+      codLocalizacion: "xlocal_id",
+      nombreLocalizacion: "locenvio",
       tarifa: "ytarifa_id",
     },
     articulos: {
@@ -344,7 +342,7 @@ const Auth = (() => {
         authority: `https://login.microsoftonline.com/${cfg.tenantId}`,
         redirectUri: cfg.redirectUri,
       },
-      cache: { cacheLocation: "sessionStorage" },
+      cache: { cacheLocation: "localStorage" },
     });
     await msalApp.initialize();
     const result = await msalApp.handleRedirectPromise();
@@ -359,7 +357,11 @@ const Auth = (() => {
   }
 
   function login() {
-    return msalApp.loginRedirect({ scopes: window.APP_CONFIG.graphScopes });
+    const apiScope = window.APP_CONFIG.api.scope;
+    return msalApp.loginRedirect({
+      scopes: window.APP_CONFIG.graphScopes,
+      extraScopesToConsent: apiScope ? [apiScope] : [],
+    });
   }
 
   function logout() {
@@ -372,11 +374,11 @@ const Auth = (() => {
       const r = await msalApp.acquireTokenSilent({ scopes, account });
       return r.accessToken;
     } catch (e) {
-      if (e instanceof msal.InteractionRequiredAuthError) {
-        await msalApp.acquireTokenRedirect({ scopes, account });
-        return null; // la página se recarga tras el redirect
-      }
-      throw e;
+      // Nunca popup: redirect en la MISMA ventana. Al volver, init() recoge la sesión
+      // y el token queda en caché, así que la siguiente llamada silenciosa ya funciona.
+      console.warn("Token no disponible en silencio, se pide con redirect:", e);
+      await msalApp.acquireTokenRedirect({ scopes, account });
+      return null;
     }
   }
 
@@ -408,7 +410,8 @@ const Api = (() => {
     const headers = { Accept: "application/json" };
     if (cfg.scope) {
       const token = await Auth.getToken([cfg.scope]);
-      if (token) headers.Authorization = `Bearer ${token}`;
+      if (!token) return new Promise(() => {}); // la página se va a recargar por el redirect
+      headers.Authorization = `Bearer ${token}`;
     }
 
     const res = await fetch(url, { headers });
