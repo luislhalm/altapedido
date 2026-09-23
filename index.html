@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pedidos Comercial</title>
+  <style>
+:root {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --text: #1f2933;
+  --muted: #6b7280;
+  --border: #d9dde3;
+  --primary: #1f4e8c;
+  --primary-hover: #173c6c;
+  --danger: #b42318;
+  --ok: #067647;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+}
+
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.error { color: var(--danger); }
+.ok { color: var(--ok); }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; background: var(--primary); color: #fff;
+}
+.topbar h1 { font-size: 18px; margin: 0; }
+.user-box { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+
+.view { max-width: 1000px; margin: 20px auto; padding: 0 16px; }
+
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+}
+.card h2 { font-size: 16px; margin: 0 0 14px; }
+.login-card { max-width: 380px; margin: 60px auto; text-align: center; }
+
+label { display: block; font-weight: 600; font-size: 13px; margin: 12px 0 6px; }
+
+input[type="text"], input[type="search"], input[type="number"], select, textarea {
+  width: 100%; padding: 9px 10px; font: inherit;
+  border: 1px solid var(--border); border-radius: 6px; background: #fff;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+
+.btn {
+  font: inherit; padding: 9px 16px; border-radius: 6px; border: 1px solid transparent; cursor: pointer;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: #fff; border-color: rgba(255,255,255,.6); padding: 5px 12px; }
+
+/* Buscador de clientes */
+.combo { position: relative; }
+.combo-list {
+  position: absolute; z-index: 10; left: 0; right: 0; top: 100%;
+  max-height: 280px; overflow-y: auto; margin: 2px 0 0; padding: 0; list-style: none;
+  background: #fff; border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.08);
+}
+.combo-list li { padding: 8px 10px; cursor: pointer; }
+.combo-list li:hover, .combo-list li.active { background: #eef3fb; }
+.combo-list li small { color: var(--muted); margin-left: 6px; }
+
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.section-head h2 { margin: 0; }
+.section-head input { max-width: 280px; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 8px; border-bottom: 1px solid var(--border); text-align: left; }
+th { font-size: 12px; text-transform: uppercase; color: var(--muted); }
+.num { text-align: right; }
+td input[type="number"] { width: 100px; text-align: right; padding: 6px; }
+tr.con-cantidad { background: #f3f8ef; }
+
+.resumen { display: flex; justify-content: space-between; margin: 14px 0; }
+
+.cod-movil { display: none; color: var(--muted); font-size: 12px; }
+
+@media (max-width: 600px) {
+  .topbar { padding: 10px 16px; }
+  .topbar h1 { font-size: 16px; }
+  .card { padding: 16px; }
+  .section-head { flex-direction: column; align-items: stretch; }
+  .section-head input { max-width: none; }
+  /* Oculta Código, Unidad e Importe; el código y la unidad se ven bajo la descripción */
+  #articulos-table th:nth-child(1), #articulos-table td:nth-child(1),
+  #articulos-table th:nth-child(3), #articulos-table td:nth-child(3),
+  #articulos-table th:nth-child(6), #articulos-table td:nth-child(6) { display: none; }
+  .cod-movil { display: block; }
+  th, td { padding: 8px 4px; }
+  td input[type="number"] { width: 72px; }
+}
+</style>
+  <!-- MSAL (login Entra ID) -->
+  <script src="https://alcdn.msauth.net/browser/2.39.0/js/msal-browser.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Pedidos Comercial</h1>
+    <div id="user-box" class="user-box hidden">
+      <span id="user-name"></span>
+      <button id="btn-logout" class="btn btn-ghost">Salir</button>
+    </div>
+  </header>
+
+  <!-- Pantalla de login -->
+  <main id="view-login" class="view">
+    <div class="card login-card">
+      <h2>Acceso</h2>
+      <p>Inicia sesión con tu cuenta corporativa.</p>
+      <button id="btn-login" class="btn btn-primary">Entrar con Microsoft</button>
+      <p id="login-error" class="error hidden"></p>
+    </div>
+  </main>
+
+  <!-- Pantalla principal -->
+  <main id="view-app" class="view hidden">
+    <section class="card">
+      <h2>1. Cliente y envío</h2>
+
+      <label for="cliente-input">Cliente</label>
+      <div class="combo">
+        <input id="cliente-input" type="text" autocomplete="off"
+               placeholder="Buscar por nombre o código…" />
+        <ul id="cliente-list" class="combo-list hidden"></ul>
+      </div>
+
+      <label for="localizacion-select">Localización de envío</label>
+      <select id="localizacion-select" disabled>
+        <option value="">— Selecciona primero un cliente —</option>
+      </select>
+    </section>
+
+    <section id="section-articulos" class="card hidden">
+      <div class="section-head">
+        <h2>2. Artículos</h2>
+        <input id="articulo-filtro" type="search" placeholder="Filtrar artículos…" />
+      </div>
+      <div id="articulos-loading" class="muted hidden">Cargando artículos…</div>
+      <div class="table-wrap">
+        <table id="articulos-table">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Descripción</th>
+              <th>Unidad</th>
+              <th class="num">Precio</th>
+              <th class="num">Cantidad</th>
+              <th class="num">Importe</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p id="articulos-empty" class="muted hidden">No hay artículos para esta localización.</p>
+    </section>
+
+    <section id="section-envio" class="card hidden">
+      <h2>3. Enviar pedido</h2>
+      <label for="observaciones">Observaciones</label>
+      <textarea id="observaciones" rows="3" placeholder="Fecha de entrega deseada, notas para el transportista…"></textarea>
+
+      <div class="resumen">
+        <span id="resumen-lineas">0 líneas</span>
+        <strong id="resumen-total"></strong>
+      </div>
+      <button id="btn-enviar" class="btn btn-primary" disabled>Enviar pedido por email</button>
+      <p id="envio-msg" class="hidden"></p>
+    </section>
+
+    <p id="app-error" class="error hidden"></p>
+  </main>
+
+  <script>
+// ============================================================
+//  CONFIGURACIÓN — lo único que hay que tocar para desplegar
+// ============================================================
+window.APP_CONFIG = {
+
+  // --- Registro de la app en Entra ID (SPA) ---
+  auth: {
+    // Registro Entra ID: APP ALTA PEDIDOS
+    clientId: "4b7aec4d-f66b-4f21-8c4d-6bb8c54deef1",
+    tenantId: "4af64d57-4be2-49ee-863f-1a7faee6e22b",
+    // Debe coincidir EXACTAMENTE con una Redirect URI tipo "SPA" del registro:
+    //   https://luislhalm.github.io/altapedido/
+    //   https://grupolopezguillen.net/altapedido/
+    // (se quita "index.html" por si alguien entra con la URL completa)
+    redirectUri: window.location.origin + window.location.pathname.replace(/index\.html$/i, ""),
+  },
+
+  // Permisos delegados de Microsoft Graph
+  graphScopes: ["User.Read", "Mail.Send"],
+
+  // --- API SQL ---
+  api: {
+    // true = datos de prueba en el navegador (sin API). Ponlo a false cuando la API esté lista.
+    useMock: true,
+
+    baseUrl: "https://api.grupolopezguillen.net",
+
+    // Scope de la API si está protegida con Entra ID (p.ej. "api://<id-api>/access_as_user").
+    // null = no se envía token.
+    scope: null,
+
+    endpoints: {
+      // Devuelve las filas de la vista (email, cliente, localización, tarifa) del comercial logueado
+      clientes: "/pedidos/clientes",
+      // SELECT * FROM jokin.fn_tarifas_pedidos(@xemail, @xcliente_id, @xlocal_id). Recibe ?xcliente_id=&xlocal_id= (el email lo pone la API desde el token)
+      articulos: "/pedidos/articulos",
+    },
+  },
+
+  // --- Nombres de columna que devuelve la API (ajústalos a tu vista / SP) ---
+  columns: {
+    vista: {
+      email: "xemail",
+      codCliente: "xcliente_id",
+      nombreCliente: "cliente",
+      codLocalizacion: "LocEnvId",
+      nombreLocalizacion: "LocEnvio",
+      tarifa: "ytarifa_id",
+    },
+    articulos: {
+      codigo: "xarticulo_id",
+      descripcion: "articulo",
+      unidad: "xunidad_prin_id",
+      precio: "xprecio",
+    },
+  },
+
+  // --- Envío del pedido ---
+  pedido: {
+    destinatario: "luis.lopez@grupolopezguillen.com",
+    asuntoPrefijo: "Nuevo pedido",
+    guardarEnEnviados: true,
+  },
+};
+
+
+// Login con Entra ID (MSAL, flujo redirect) y obtención de tokens
+const Auth = (() => {
+  const cfg = window.APP_CONFIG.auth;
+
+  // Modo demo: si aún no hay clientId configurado, se entra sin login (solo para probar la interfaz)
+  const DEMO = !cfg.clientId || cfg.clientId.startsWith("PON-AQUI");
+
+  let msalApp = null;
+  let account = null;
+
+  async function init() {
+    if (DEMO) {
+      account = { username: "demo@grupolopezguillen.com", name: "Usuario demo" };
+      return account;
+    }
+    msalApp = new msal.PublicClientApplication({
+      auth: {
+        clientId: cfg.clientId,
+        authority: `https://login.microsoftonline.com/${cfg.tenantId}`,
+        redirectUri: cfg.redirectUri,
+      },
+      cache: { cacheLocation: "sessionStorage" },
+    });
+    await msalApp.initialize();
+    const result = await msalApp.handleRedirectPromise();
+    if (result && result.account) {
+      account = result.account;
+    } else {
+      const accounts = msalApp.getAllAccounts();
+      if (accounts.length) account = accounts[0];
+    }
+    if (account) msalApp.setActiveAccount(account);
+    return account;
+  }
+
+  function login() {
+    return msalApp.loginRedirect({ scopes: window.APP_CONFIG.graphScopes });
+  }
+
+  function logout() {
+    if (DEMO) return location.reload();
+    return msalApp.logoutRedirect({ account });
+  }
+
+  async function getToken(scopes) {
+    try {
+      const r = await msalApp.acquireTokenSilent({ scopes, account });
+      return r.accessToken;
+    } catch (e) {
+      if (e instanceof msal.InteractionRequiredAuthError) {
+        await msalApp.acquireTokenRedirect({ scopes, account });
+        return null; // la página se recarga tras el redirect
+      }
+      throw e;
+    }
+  }
+
+  return {
+    isDemo: () => DEMO,
+    init,
+    login,
+    logout,
+    getToken,
+    getAccount: () => account,
+    getEmail: () => (account ? account.username.toLowerCase() : null),
+    getName: () => (account ? account.name || account.username : ""),
+  };
+})();
+
+
+// Acceso a la API SQL (o datos de prueba si useMock = true)
+const Api = (() => {
+  const cfg = window.APP_CONFIG.api;
+  const colV = window.APP_CONFIG.columns.vista;
+  const colA = window.APP_CONFIG.columns.articulos;
+
+  async function request(path, params) {
+    const url = new URL(cfg.baseUrl + path);
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, v);
+    });
+
+    const headers = { Accept: "application/json" };
+    if (cfg.scope) {
+      const token = await Auth.getToken([cfg.scope]);
+      if (token) headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`Error API ${res.status} en ${path}`);
+    const data = await res.json();
+    // Acepta tanto un array directo como { data: [...] } / { recordset: [...] }
+    return Array.isArray(data) ? data : data.data || data.recordset || [];
+  }
+
+  // Filas de la vista -> [{ codCliente, nombreCliente, localizaciones: [{ cod, nombre, tarifa }] }]
+  function agruparClientes(rows) {
+    const map = new Map();
+    rows.forEach((r) => {
+      const cod = String(r[colV.codCliente]).trim();
+      if (!map.has(cod)) {
+        map.set(cod, {
+          codCliente: cod,
+          nombreCliente: String(r[colV.nombreCliente] || "").trim(),
+          localizaciones: [],
+        });
+      }
+      map.get(cod).localizaciones.push({
+        cod: String(r[colV.codLocalizacion]).trim(),
+        nombre: String(r[colV.nombreLocalizacion] || "").trim(),
+        tarifa: r[colV.tarifa] != null ? String(r[colV.tarifa]).trim() : "",
+      });
+    });
+    return [...map.values()].sort((a, b) => a.nombreCliente.localeCompare(b.nombreCliente, "es"));
+  }
+
+  function normalizarArticulos(rows) {
+    return rows.map((r) => ({
+      codigo: String(r[colA.codigo]).trim(),
+      descripcion: String(r[colA.descripcion] || "").trim(),
+      unidad: String(r[colA.unidad] || "").trim(),
+      precio: r[colA.precio] != null ? Number(r[colA.precio]) : null,
+    }));
+  }
+
+  async function getClientes(email) {
+    // IMPORTANTE: la API debe filtrar por el email del token, no fiarse de este parámetro.
+    const rows = cfg.useMock ? Mock.clientes(email) : await request(cfg.endpoints.clientes, { email });
+    return agruparClientes(rows);
+  }
+
+  async function getArticulos({ tarifa, codCliente, codLocalizacion }) {
+    // La tarifa la saca la función SQL de la localización de envío; no se envía desde el navegador
+    const params = { xcliente_id: codCliente, xlocal_id: codLocalizacion };
+    const rows = cfg.useMock ? await Mock.articulos({ tarifa }) : await request(cfg.endpoints.articulos, params);
+    return normalizarArticulos(rows);
+  }
+
+  // ---------- Datos de prueba ----------
+  const Mock = {
+    clientes(email) {
+      const e = email || "demo@grupolopezguillen.com";
+      const f = (c, n, lc, ln, t) => ({
+        [colV.email]: e, [colV.codCliente]: c, [colV.nombreCliente]: n,
+        [colV.codLocalizacion]: lc, [colV.nombreLocalizacion]: ln, [colV.tarifa]: t,
+      });
+      return [
+        f("C0001", "Materiales Construcción Pérez S.L.", "01", "Almacén central - Murcia", "T01"),
+        f("C0001", "Materiales Construcción Pérez S.L.", "02", "Obra Av. Libertad - Cartagena", "T01"),
+        f("C0002", "Almacenes Sánchez Hermanos", "01", "Nave Pol. Ind. Oeste", "T02"),
+        f("C0003", "Reformas del Sureste S.A.", "01", "Sede - Alicante", "T03"),
+        f("C0003", "Reformas del Sureste S.A.", "02", "Obra Residencial Las Palmeras", "T03"),
+        f("C0004", "Ferretería La Unión", "01", "Tienda", "T02"),
+      ];
+    },
+    articulos({ tarifa }) {
+      const base = [
+        ["MC-001", "Mortero cola C1 gris 25 kg", "SAC", 4.2],
+        ["MC-002", "Mortero cola C2TE blanco 25 kg", "SAC", 7.9],
+        ["MR-010", "Mortero revoco monocapa 25 kg", "SAC", 6.35],
+        ["MA-020", "Mortero albañilería M-7,5 granel", "TN", 58.0],
+        ["SA-100", "Adhesivo SATE 25 kg", "SAC", 11.5],
+        ["JN-005", "Junta fina gris 5 kg", "SAC", 3.1],
+      ];
+      const factor = { T01: 1, T02: 0.95, T03: 1.05 }[tarifa] || 1;
+      const rows = base.map(([c, d, u, p]) => ({
+        [colA.codigo]: c, [colA.descripcion]: d, [colA.unidad]: u, [colA.precio]: +(p * factor).toFixed(2),
+      }));
+      return new Promise((r) => setTimeout(() => r(rows), 300));
+    },
+  };
+
+  return { getClientes, getArticulos };
+})();
+
+
+// Construcción y envío del pedido por email (Microsoft Graph /me/sendMail)
+const Mail = (() => {
+  const cfgPedido = window.APP_CONFIG.pedido;
+
+  const esc = (s) =>
+    String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const eur = (n) =>
+    n == null ? "—" : n.toLocaleString("es-ES", { style: "currency", currency: "EUR" });
+
+  const qty = (n) => n.toLocaleString("es-ES", { maximumFractionDigits: 3 });
+
+  // pedido = { comercial:{nombre,email}, cliente:{codCliente,nombreCliente}, localizacion:{cod,nombre,tarifa}, lineas:[{codigo,descripcion,unidad,precio,cantidad}], observaciones }
+  function construirHtml(p) {
+    const total = p.lineas.reduce((s, l) => s + (l.precio != null ? l.precio * l.cantidad : 0), 0);
+    const filas = p.lineas
+      .map(
+        (l) => `<tr>
+          <td style="padding:6px;border:1px solid #ccc">${esc(l.codigo)}</td>
+          <td style="padding:6px;border:1px solid #ccc">${esc(l.descripcion)}</td>
+          <td style="padding:6px;border:1px solid #ccc">${esc(l.unidad)}</td>
+          <td style="padding:6px;border:1px solid #ccc;text-align:right">${qty(l.cantidad)}</td>
+          <td style="padding:6px;border:1px solid #ccc;text-align:right">${eur(l.precio)}</td>
+          <td style="padding:6px;border:1px solid #ccc;text-align:right">${l.precio != null ? eur(l.precio * l.cantidad) : "—"}</td>
+        </tr>`
+      )
+      .join("");
+
+    const fecha = new Date().toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
+
+    return `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#1f2933">
+      <h2 style="margin:0 0 12px">Nuevo pedido</h2>
+      <table style="border-collapse:collapse;margin-bottom:14px">
+        <tr><td style="padding:3px 12px 3px 0"><b>Fecha</b></td><td>${esc(fecha)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0"><b>Comercial</b></td><td>${esc(p.comercial.nombre)} (${esc(p.comercial.email)})</td></tr>
+        <tr><td style="padding:3px 12px 3px 0"><b>Cliente</b></td><td>${esc(p.cliente.codCliente)} - ${esc(p.cliente.nombreCliente)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0"><b>Envío</b></td><td>${esc(p.localizacion.cod)} - ${esc(p.localizacion.nombre)}</td></tr>
+        <tr><td style="padding:3px 12px 3px 0"><b>Tarifa</b></td><td>${esc(p.localizacion.tarifa)}</td></tr>
+      </table>
+      <table style="border-collapse:collapse;width:100%">
+        <thead><tr style="background:#1f4e8c;color:#fff">
+          <th style="padding:6px;text-align:left">Código</th>
+          <th style="padding:6px;text-align:left">Descripción</th>
+          <th style="padding:6px;text-align:left">Ud.</th>
+          <th style="padding:6px;text-align:right">Cantidad</th>
+          <th style="padding:6px;text-align:right">Precio</th>
+          <th style="padding:6px;text-align:right">Importe</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+        <tfoot><tr>
+          <td colspan="5" style="padding:6px;text-align:right"><b>Total (sin IVA)</b></td>
+          <td style="padding:6px;text-align:right"><b>${eur(total)}</b></td>
+        </tr></tfoot>
+      </table>
+      ${p.observaciones ? `<p style="margin-top:14px"><b>Observaciones:</b><br>${esc(p.observaciones).replace(/\n/g, "<br>")}</p>` : ""}
+    </div>`;
+  }
+
+  async function enviarPedido(pedido) {
+    const token = await Auth.getToken(["Mail.Send"]);
+    if (!token) throw new Error("No se pudo obtener el permiso para enviar correo.");
+
+    const body = {
+      message: {
+        subject: `${cfgPedido.asuntoPrefijo} - ${pedido.cliente.codCliente} ${pedido.cliente.nombreCliente} - ${pedido.localizacion.nombre}`,
+        body: { contentType: "HTML", content: construirHtml(pedido) },
+        toRecipients: [{ emailAddress: { address: cfgPedido.destinatario } }],
+        replyTo: [{ emailAddress: { address: pedido.comercial.email } }],
+      },
+      saveToSentItems: cfgPedido.guardarEnEnviados,
+    };
+
+    const res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.status !== 202) {
+      const txt = await res.text();
+      throw new Error(`Graph ${res.status}: ${txt}`);
+    }
+  }
+
+  return { enviarPedido, construirHtml, eur };
+})();
+
+
+// Lógica de la pantalla de pedidos
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  const state = {
+    clientes: [],
+    cliente: null,
+    localizacion: null,
+    articulos: [],
+    cantidades: new Map(), // codigo -> cantidad
+    comboIndex: -1,
+    comboResultados: [],
+    reqArticulos: 0,
+  };
+
+  const normalizar = (s) =>
+    String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+  const mostrar = (el, visible) => el.classList.toggle("hidden", !visible);
+
+  function error(msg) {
+    $("app-error").textContent = msg || "";
+    mostrar($("app-error"), !!msg);
+  }
+
+  // ---------------- Arranque ----------------
+  async function start() {
+    $("btn-login").onclick = () => Auth.login();
+    $("btn-logout").onclick = () => Auth.logout();
+
+    let account;
+    try {
+      account = await Auth.init();
+    } catch (e) {
+      $("login-error").textContent = "Error de inicio de sesión: " + e.message;
+      mostrar($("login-error"), true);
+      return;
+    }
+    if (!account) return; // se queda en la pantalla de login
+
+    $("user-name").textContent = Auth.getName() + (Auth.isDemo() ? " (modo demo)" : "");
+    mostrar($("user-box"), true);
+    mostrar($("view-login"), false);
+    mostrar($("view-app"), true);
+
+    initCombo();
+    $("localizacion-select").onchange = onLocalizacionChange;
+    $("articulo-filtro").oninput = renderArticulos;
+    $("btn-enviar").onclick = enviar;
+
+    try {
+      $("cliente-input").placeholder = "Cargando clientes…";
+      state.clientes = await Api.getClientes(Auth.getEmail());
+      $("cliente-input").placeholder = state.clientes.length
+        ? `Buscar entre ${state.clientes.length} clientes por nombre o código…`
+        : "No tienes clientes asignados";
+    } catch (e) {
+      error("No se pudieron cargar los clientes: " + e.message);
+    }
+  }
+
+  // ---------------- Buscador de clientes ----------------
+  function initCombo() {
+    const input = $("cliente-input");
+    const list = $("cliente-list");
+
+    input.addEventListener("input", () => {
+      if (state.cliente) seleccionarCliente(null, false);
+      filtrarClientes(input.value);
+    });
+    input.addEventListener("focus", () => filtrarClientes(input.value));
+    input.addEventListener("keydown", (e) => {
+      const n = state.comboResultados.length;
+      if (e.key === "ArrowDown" && n) {
+        e.preventDefault();
+        state.comboIndex = (state.comboIndex + 1) % n;
+        pintarActivo();
+      } else if (e.key === "ArrowUp" && n) {
+        e.preventDefault();
+        state.comboIndex = (state.comboIndex - 1 + n) % n;
+        pintarActivo();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const c = state.comboResultados[state.comboIndex >= 0 ? state.comboIndex : 0];
+        if (c) seleccionarCliente(c);
+      } else if (e.key === "Escape") {
+        mostrar(list, false);
+      }
+    });
+    // mousedown para que se dispare antes del blur del input
+    list.addEventListener("mousedown", (e) => {
+      const li = e.target.closest("li[data-i]");
+      if (li) {
+        e.preventDefault();
+        seleccionarCliente(state.comboResultados[+li.dataset.i]);
+      }
+    });
+    input.addEventListener("blur", () => setTimeout(() => mostrar(list, false), 100));
+  }
+
+  function filtrarClientes(texto) {
+    const list = $("cliente-list");
+    const palabras = normalizar(texto).split(/\s+/).filter(Boolean);
+    state.comboResultados = state.clientes
+      .filter((c) => {
+        const h = normalizar(c.codCliente + " " + c.nombreCliente);
+        return palabras.every((p) => h.includes(p));
+      })
+      .slice(0, 50);
+    state.comboIndex = -1;
+
+    list.innerHTML = "";
+    if (!state.comboResultados.length) {
+      list.innerHTML = `<li class="muted">Sin resultados</li>`;
+    } else {
+      state.comboResultados.forEach((c, i) => {
+        const li = document.createElement("li");
+        li.dataset.i = i;
+        li.textContent = c.nombreCliente;
+        const small = document.createElement("small");
+        small.textContent = c.codCliente;
+        li.appendChild(small);
+        list.appendChild(li);
+      });
+    }
+    mostrar(list, state.clientes.length > 0);
+  }
+
+  function pintarActivo() {
+    [...$("cliente-list").children].forEach((li, i) => {
+      li.classList.toggle("active", i === state.comboIndex);
+      if (i === state.comboIndex) li.scrollIntoView({ block: "nearest" });
+    });
+  }
+
+  function seleccionarCliente(c, actualizarInput = true) {
+    state.cliente = c;
+    state.localizacion = null;
+    limpiarArticulos();
+
+    const sel = $("localizacion-select");
+    sel.innerHTML = "";
+    if (!c) {
+      sel.innerHTML = `<option value="">— Selecciona primero un cliente —</option>`;
+      sel.disabled = true;
+      return;
+    }
+    if (actualizarInput) $("cliente-input").value = `${c.nombreCliente} (${c.codCliente})`;
+    mostrar($("cliente-list"), false);
+
+    sel.disabled = false;
+    if (c.localizaciones.length > 1) {
+      sel.appendChild(new Option("— Selecciona localización de envío —", ""));
+    }
+    c.localizaciones.forEach((l, i) => sel.appendChild(new Option(`${l.cod} - ${l.nombre}`, i)));
+    if (c.localizaciones.length === 1) {
+      sel.value = "0";
+      onLocalizacionChange();
+    } else {
+      sel.focus();
+    }
+  }
+
+  // ---------------- Artículos ----------------
+  function limpiarArticulos() {
+    state.articulos = [];
+    state.cantidades.clear();
+    $("articulo-filtro").value = "";
+    $("envio-msg").classList.add("hidden");
+    mostrar($("section-articulos"), false);
+    mostrar($("section-envio"), false);
+    actualizarResumen();
+  }
+
+  async function onLocalizacionChange() {
+    const v = $("localizacion-select").value;
+    limpiarArticulos();
+    if (v === "" || !state.cliente) return;
+
+    state.localizacion = state.cliente.localizaciones[+v];
+    mostrar($("section-articulos"), true);
+    mostrar($("articulos-loading"), true);
+    $("articulos-table").querySelector("tbody").innerHTML = "";
+    error("");
+
+    const reqId = ++state.reqArticulos; // evita pintar respuestas de una selección anterior
+    try {
+      const arts = await Api.getArticulos({
+        tarifa: state.localizacion.tarifa,
+        codCliente: state.cliente.codCliente,
+        codLocalizacion: state.localizacion.cod,
+      });
+      if (reqId !== state.reqArticulos) return;
+      state.articulos = arts;
+      renderArticulos();
+      mostrar($("section-envio"), true);
+    } catch (e) {
+      if (reqId === state.reqArticulos) error("No se pudieron cargar los artículos: " + e.message);
+    } finally {
+      if (reqId === state.reqArticulos) mostrar($("articulos-loading"), false);
+    }
+  }
+
+  function renderArticulos() {
+    const tbody = $("articulos-table").querySelector("tbody");
+    const palabras = normalizar($("articulo-filtro").value).split(/\s+/).filter(Boolean);
+    const visibles = state.articulos.filter((a) => {
+      const h = normalizar(a.codigo + " " + a.descripcion);
+      return palabras.every((p) => h.includes(p));
+    });
+
+    tbody.innerHTML = "";
+    visibles.forEach((a) => {
+      const tr = document.createElement("tr");
+      const cant = state.cantidades.get(a.codigo) || "";
+      tr.innerHTML = `
+        <td></td><td></td><td></td>
+        <td class="num">${Mail.eur(a.precio)}</td>
+        <td class="num"><input type="number" min="0" step="any" inputmode="decimal" /></td>
+        <td class="num importe"></td>`;
+      tr.children[0].textContent = a.codigo;
+      tr.children[1].textContent = a.descripcion;
+      const codMovil = document.createElement("span");
+      codMovil.className = "cod-movil";
+      codMovil.textContent = `${a.codigo} · ${a.unidad}`;
+      tr.children[1].appendChild(codMovil);
+      tr.children[2].textContent = a.unidad;
+      const inp = tr.querySelector("input");
+      inp.value = cant;
+      inp.setAttribute("aria-label", "Cantidad " + a.descripcion);
+      inp.addEventListener("input", () => {
+        const n = parseFloat(inp.value.replace(",", "."));
+        if (n > 0) state.cantidades.set(a.codigo, n);
+        else state.cantidades.delete(a.codigo);
+        pintarFila(tr, a);
+        actualizarResumen();
+      });
+      pintarFila(tr, a);
+      tbody.appendChild(tr);
+    });
+
+    mostrar($("articulos-empty"), state.articulos.length === 0);
+    actualizarResumen();
+  }
+
+  function pintarFila(tr, a) {
+    const n = state.cantidades.get(a.codigo);
+    tr.classList.toggle("con-cantidad", !!n);
+    tr.querySelector(".importe").textContent = n && a.precio != null ? Mail.eur(n * a.precio) : "";
+  }
+
+  function lineasPedido() {
+    return state.articulos
+      .filter((a) => state.cantidades.has(a.codigo))
+      .map((a) => ({ ...a, cantidad: state.cantidades.get(a.codigo) }));
+  }
+
+  function actualizarResumen() {
+    const lineas = lineasPedido();
+    const total = lineas.reduce((s, l) => s + (l.precio != null ? l.precio * l.cantidad : 0), 0);
+    $("resumen-lineas").textContent = `${lineas.length} ${lineas.length === 1 ? "línea" : "líneas"}`;
+    $("resumen-total").textContent = lineas.length ? "Total: " + Mail.eur(total) : "";
+    $("btn-enviar").disabled = lineas.length === 0;
+  }
+
+  // ---------------- Envío ----------------
+  async function enviar() {
+    const lineas = lineasPedido();
+    if (!lineas.length) return;
+
+    const pedido = {
+      comercial: { nombre: Auth.getName(), email: Auth.getEmail() },
+      cliente: state.cliente,
+      localizacion: state.localizacion,
+      lineas,
+      observaciones: $("observaciones").value.trim(),
+    };
+
+    const resumen = `¿Enviar pedido de ${lineas.length} líneas para ${state.cliente.nombreCliente} (${state.localizacion.nombre})?`;
+    if (!confirm(resumen)) return;
+
+    const btn = $("btn-enviar");
+    const msg = $("envio-msg");
+    btn.disabled = true;
+    btn.textContent = "Enviando…";
+    msg.className = "";
+    msg.classList.add("hidden");
+
+    try {
+      if (Auth.isDemo()) {
+        // Sin login no hay Graph: se muestra el email que se enviaría
+        const w = window.open("", "_blank");
+        w.document.write(Mail.construirHtml(pedido));
+        w.document.close();
+        msg.textContent = "Modo demo: se ha abierto una vista previa del email (no se ha enviado).";
+      } else {
+        await Mail.enviarPedido(pedido);
+        msg.textContent = `Pedido enviado a ${window.APP_CONFIG.pedido.destinatario}.`;
+      }
+      msg.classList.add("ok");
+      // Reinicia cantidades para un nuevo pedido, manteniendo cliente y localización
+      state.cantidades.clear();
+      $("observaciones").value = "";
+      renderArticulos();
+    } catch (e) {
+      msg.textContent = "Error al enviar el pedido: " + e.message;
+      msg.classList.add("error");
+    } finally {
+      msg.classList.remove("hidden");
+      btn.textContent = "Enviar pedido por email";
+      actualizarResumen();
+    }
+  }
+
+  start();
+})();
+
+  </script>
+</body>
+</html>
