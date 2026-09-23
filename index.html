@@ -522,7 +522,7 @@ const Api = (() => {
       familia: txt(r[colA.familia]),
       subfamilia: txt(r[colA.subfamilia]),
       grupo: txt(r[colA.grupo]),
-    }));
+    })).sort((a, b) => a.codigo.localeCompare(b.codigo, "es", { numeric: true })); // ordenados por código de artículo
   }
 
   async function getClientes() {
